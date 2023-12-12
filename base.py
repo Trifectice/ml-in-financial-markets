@@ -37,3 +37,15 @@ symbols = [
     'v',
     'gs'
 ]
+
+df_raw = YahooDownloader(start_date = TRAIN_START_DATE,
+                         end_date= TRADE_END_DATE,
+                         ticker_list= symbols).fetch_data()
+
+fe = FeatureEngineer(use_technical_indicator=True,
+                     tech_indicator_list= INDICATORS,
+                     use_vix=True,
+                     use_turbulence=True,
+                     user_defined_feature= False)
+
+processed = fe.preprocess_data(df_raw)
