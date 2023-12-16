@@ -8,6 +8,7 @@
 
 #imports
 
+import os
 import pandas as pd
 import numpy as np
 import datetime
@@ -15,7 +16,11 @@ import yfinance as yf
 
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader 
 from finrl.meta.preprocessor.preprocessors import FeatureEngineer, data_split
-from finrl.config import INDICATORS
+from finrl.meta.env_stock_trading.env_stocktrading import StockTradingEnv
+from finrl.agents.stablebaselines3.models import DRLAgent
+from stable_baselines3.common.logger import configure
+from finrl.main import check_and_make_directories
+from finrl.config import INDICATORS, TRAINED_MODEL_DIR, RESULTS_DIR
 
 import itertools
 
@@ -70,11 +75,23 @@ print(len(train))
 print(len(trade))
 
 
-train_path = '../data-sets/train_data.csv'
-trade_path = '../data-sets/trade_data.csv'
+train_path = './data-sets/train_data.csv'
+trade_path = './data-sets/trade_data.csv'
 
 with open(train_path, 'w', encoding='utf-8-sig') as f:
     train.to_csv(f)
 
 with open(trade_path, 'w', encoding='utf-8-sig') as f:
     trade.to_csv(f)
+
+check_and_make_directories([TRAINED_MODEL_DIR]) 
+
+#Pull data from data-sets
+train = pd.read_csv('./data-sets/train_data.csv')
+train = train.set_index(train.columns[0])
+train.index.names = ['']
+
+#Setup Environment
+stock_dimensions = len(train.tic.unique())
+state_space = 1 + 2*stock_dimensions + len(INDICATORS)*stock_dimensions
+print(f'Stock Dimension: {stock_dimensions}, State Space: {state_space}')
