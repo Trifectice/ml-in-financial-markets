@@ -1,2 +1,4 @@
 .env
 .DS_Store
+trade_data.csv
+train_data.csv
