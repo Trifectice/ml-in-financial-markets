@@ -125,13 +125,13 @@ agent = DRLAgent(env = env_train)
 
 #Mutiple Fin RL training options, multiple can be used
 if_using_a2c = True
-if_using_ddbg = False
+#if_using_ddpg = False
 if_using_ppo = False
 if_using_td3 = False
 if_using_sac = False
 
 model_a2c = agent.get_model('a2c')
-model_ddbg = agent.get_model('ddbg')
+#model_ddpg = agent.get_model('ddbg')
 model_ppo = agent.get_model('ppo')
 model_td3 = agent.get_model('td3')
 model_sac = agent.get_model('sac')
@@ -142,14 +142,14 @@ if if_using_a2c:
   new_logger_a2c = configure(tmp_path, ['stdout', 'csv', 'tensorboard'])
   # set new logger 
   model_a2c.set_logger(new_logger_a2c)
-
-if if_using_ddbg:
+'''
+if if_using_ddpg:
   # set up logger
-  tmp_path = RESULTS_DIR + '/ddbg'
-  new_logger_ddbg = configure(tmp_path, ['stdout', 'csv', 'tensorboard'])
+  tmp_path = RESULTS_DIR + '/ddpg'
+  new_logger_ddpg = configure(tmp_path, ['stdout', 'csv', 'tensorboard'])
   # set new logger 
-  model_ddbg.set_logger(new_logger_ddbg)
-
+  model_ddbg.set_logger(new_logger_ddpg)
+'''
 if if_using_ppo:
   # set up logger
   tmp_path = RESULTS_DIR + '/ppo'
@@ -175,11 +175,11 @@ if if_using_sac:
 trained_a2c = agent.train_model(model=model_a2c,
                                 tb_log_name= 'a2c',
                                 total_timesteps=50000) if if_using_a2c else None
-
-trained_ddbg = agent.train_model(model=model_ddbg,
-                                tb_log_name= 'ddbg',
-                                total_timesteps=50000) if if_using_ddbg else None
-
+'''
+trained_ddpg = agent.train_model(model=model_ddpg,
+                                tb_log_name= 'ddpg',
+                                total_timesteps=50000) if if_using_ddpg else None
+'''
 trained_ppo = agent.train_model(model=model_ppo,
                                 tb_log_name= 'ppo',
                                 total_timesteps=50000) if if_using_ppo else None
@@ -193,8 +193,73 @@ trained_sac = agent.train_model(model=model_sac,
                                 total_timesteps=50000) if if_using_sac else None
 
 #Saving trained Models
-trained_a2c.save(TRAINED_MODEL_DIR + "/agent_a2c") if if_using_a2c else None
-trained_ddbg.save(TRAINED_MODEL_DIR + "/agent_ddbg") if if_using_ddbg else None
+trained_A2C.save(TRAINED_MODEL_DIR + "/agent_a2c") if if_using_a2c else None
+#trained_ddpg.save(TRAINED_MODEL_DIR + "/agent_ddpg") if if_using_ddpg else None
 trained_ppo.save(TRAINED_MODEL_DIR + "/agent_ppo") if if_using_ppo else None
 trained_td3.save(TRAINED_MODEL_DIR + "/agent_td3") if if_using_td3 else None
 trained_sac.save(TRAINED_MODEL_DIR + "/agent_sac") if if_using_sac else None
+
+#Pulling data for back testing and traiding env
+
+trained_a2c = a2c.load('trained_models/agent_a2c') if if_using_a2c else None
+#trained_ddpg = DDPG.load('trained_models/agent_ddpg') if if_using_ddpg else None
+trained_ppo = PPO.load('trained_models/agent_ppo') if if_using_ppo else None
+trained_td3 = TD3.load('trained_models/agent_td3') if if_using_td3 else None
+trained_sac = SAC.load('trained_models/agent_sac') if if_using_sac else None
+
+#Out of sample performance 
+
+stock_dimensions = len(trade.tic.unique())
+state_space = 1 + 2*stock_dimensions + len(INDICATORS)*stock_dimensions
+print(f"Stock Dimentsion: {stock_dimensions}, State Space: {state_space}")
+
+buy_cost_ls = sell_cost_ls = [0.001 for _ in range(stock_dimensions)]
+num_stock_shares = [0] * stock_dimensions
+
+env_kwargs = {
+    'hmax': 100,
+    'initial_amount': 100000,
+    'num_stock_shares': num_stock_shares,
+    'buy_cost_pct': buy_cost_ls,
+    'sell_cost_pct': sell_cost_ls,
+    'state_space': state_space,
+    'stock_dim': stock_dimensions,
+    'tech_indicator_list': INDICATORS,
+    'action_space': stock_dimensions,
+    'reward_scaling': 1e-4
+    }
+
+e_train_gym = StockTradingEnv(df = trade, turbulence_threshold = 70, risk_indicator_col='vix', **env_kwargs)
+
+df_account_value_a2c, df_actions_a2c = DRLAgent.DRL_prediction(
+    model=trained_a2c,
+    enviroment = e_train_gym) if if_using_a2c else (None, None)
+ 
+##Mean variance optimization (MVO)
+
+#Help us process data into a form for weight calculation
+def process_df_for_mvo(df):
+    df = df.sort_values(['date', 'tic'], ignore_index = True)[['date', 'tic', 'close']]
+    fst = df
+    fst = dffst = fst.iloc[0:stock_dimensions, :]
+    tic = fst['tic'].tolist()
+
+    mvo = pd.DataFrame
+    for k in range(len(tic)):
+        mvo[tic[k]] = 0
+
+    for i in range(df.shape[0]//stock_dimensions):
+        n = df
+        n = n.iloc[i * stock_dimensions:(i+i) * stock_dimensions, :]
+        date = n['date'][i*stock_dimensions]
+        mvo.loc[date] = n['close'].tolist()
+
+    return mvo
+
+#Calculates weights of average return and convariance matrix
+def StockReturnsComputing(StockPrice, Rows, Columns):
+    StockReturn = np.zero([Rows-1, Columns])
+    for j in range(Columns):      # j: Assets
+        for i in range(Rows-1):   # i: Daily Prices
+            StockPrice[i,j]=((StockPrice[i+1, j]-StockPrice[i,j])/StockPrice[i,j])* 100
+    return StockReturn
