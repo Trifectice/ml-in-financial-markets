@@ -13,11 +13,14 @@ import pandas as pd
 import numpy as np
 import datetime
 import yfinance as yf
+import matplotlib.pyplot as plt 
+import sys
 
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader 
 from finrl.meta.preprocessor.preprocessors import FeatureEngineer, data_split
 from finrl.meta.env_stock_trading.env_stocktrading import StockTradingEnv
 from finrl.agents.stablebaselines3.models import DRLAgent
+from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3
 from stable_baselines3.common.logger import configure
 from finrl.main import check_and_make_directories
 from finrl.config import INDICATORS, TRAINED_MODEL_DIR, RESULTS_DIR
@@ -193,7 +196,7 @@ trained_sac = agent.train_model(model=model_sac,
                                 total_timesteps=50000) if if_using_sac else None
 
 #Saving trained Models
-trained_A2C.save(TRAINED_MODEL_DIR + "/agent_a2c") if if_using_a2c else None
+trained_a2c.save(TRAINED_MODEL_DIR + "/agent_a2c") if if_using_a2c else None
 #trained_ddpg.save(TRAINED_MODEL_DIR + "/agent_ddpg") if if_using_ddpg else None
 trained_ppo.save(TRAINED_MODEL_DIR + "/agent_ppo") if if_using_ppo else None
 trained_td3.save(TRAINED_MODEL_DIR + "/agent_td3") if if_using_td3 else None
@@ -201,7 +204,7 @@ trained_sac.save(TRAINED_MODEL_DIR + "/agent_sac") if if_using_sac else None
 
 #Pulling data for back testing and traiding env
 
-trained_a2c = a2c.load('trained_models/agent_a2c') if if_using_a2c else None
+trained_a2c = A2C.load('trained_models/agent_a2c.zip') if if_using_a2c else None
 #trained_ddpg = DDPG.load('trained_models/agent_ddpg') if if_using_ddpg else None
 trained_ppo = PPO.load('trained_models/agent_ppo') if if_using_ppo else None
 trained_td3 = TD3.load('trained_models/agent_td3') if if_using_td3 else None
@@ -233,7 +236,7 @@ e_train_gym = StockTradingEnv(df = trade, turbulence_threshold = 70, risk_indica
 
 df_account_value_a2c, df_actions_a2c = DRLAgent.DRL_prediction(
     model=trained_a2c,
-    enviroment = e_train_gym) if if_using_a2c else (None, None)
+    environment = e_train_gym) if if_using_a2c else (None, None)
  
 ##Mean variance optimization (MVO)
 
