@@ -1,4 +1,5 @@
 .env
 .DS_Store
-trade_data.csv
-train_data.csv
+./data_sets/trade_data.csv
+./data_sets/train_data.csv
+./results/a2c/events.out.tfevents.1708739788.Scotts-MacBook-Pro.local.35285.0

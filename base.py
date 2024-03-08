@@ -15,7 +15,9 @@ import datetime
 import yfinance as yf
 import matplotlib.pyplot as plt 
 import sys
+import itertools
 
+from pypfopt.efficient_frontier import EfficientFrontier
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader 
 from finrl.meta.preprocessor.preprocessors import FeatureEngineer, data_split
 from finrl.meta.env_stock_trading.env_stocktrading import StockTradingEnv
@@ -25,7 +27,6 @@ from stable_baselines3.common.logger import configure
 from finrl.main import check_and_make_directories
 from finrl.config import INDICATORS, TRAINED_MODEL_DIR, RESULTS_DIR
 
-import itertools
 
 TRAIN_START_DATE = '2009-01-01'
 TRAIN_END_DATE = '2020-07-01'
@@ -128,13 +129,13 @@ agent = DRLAgent(env = env_train)
 
 #Mutiple Fin RL training options, multiple can be used
 if_using_a2c = True
-#if_using_ddpg = False
+if_using_ddpg = False
 if_using_ppo = False
 if_using_td3 = False
 if_using_sac = False
 
 model_a2c = agent.get_model('a2c')
-#model_ddpg = agent.get_model('ddbg')
+model_ddpg = agent.get_model('ddpg')
 model_ppo = agent.get_model('ppo')
 model_td3 = agent.get_model('td3')
 model_sac = agent.get_model('sac')
@@ -145,14 +146,14 @@ if if_using_a2c:
   new_logger_a2c = configure(tmp_path, ['stdout', 'csv', 'tensorboard'])
   # set new logger 
   model_a2c.set_logger(new_logger_a2c)
-'''
+
 if if_using_ddpg:
   # set up logger
   tmp_path = RESULTS_DIR + '/ddpg'
   new_logger_ddpg = configure(tmp_path, ['stdout', 'csv', 'tensorboard'])
   # set new logger 
-  model_ddbg.set_logger(new_logger_ddpg)
-'''
+  model_ddpg.set_logger(new_logger_ddpg)
+
 if if_using_ppo:
   # set up logger
   tmp_path = RESULTS_DIR + '/ppo'
@@ -178,11 +179,11 @@ if if_using_sac:
 trained_a2c = agent.train_model(model=model_a2c,
                                 tb_log_name= 'a2c',
                                 total_timesteps=50000) if if_using_a2c else None
-'''
+
 trained_ddpg = agent.train_model(model=model_ddpg,
                                 tb_log_name= 'ddpg',
                                 total_timesteps=50000) if if_using_ddpg else None
-'''
+
 trained_ppo = agent.train_model(model=model_ppo,
                                 tb_log_name= 'ppo',
                                 total_timesteps=50000) if if_using_ppo else None
@@ -197,7 +198,7 @@ trained_sac = agent.train_model(model=model_sac,
 
 #Saving trained Models
 trained_a2c.save(TRAINED_MODEL_DIR + "/agent_a2c") if if_using_a2c else None
-#trained_ddpg.save(TRAINED_MODEL_DIR + "/agent_ddpg") if if_using_ddpg else None
+trained_ddpg.save(TRAINED_MODEL_DIR + "/agent_ddpg") if if_using_ddpg else None
 trained_ppo.save(TRAINED_MODEL_DIR + "/agent_ppo") if if_using_ppo else None
 trained_td3.save(TRAINED_MODEL_DIR + "/agent_td3") if if_using_td3 else None
 trained_sac.save(TRAINED_MODEL_DIR + "/agent_sac") if if_using_sac else None
@@ -205,7 +206,7 @@ trained_sac.save(TRAINED_MODEL_DIR + "/agent_sac") if if_using_sac else None
 #Pulling data for back testing and traiding env
 
 trained_a2c = A2C.load('trained_models/agent_a2c.zip') if if_using_a2c else None
-#trained_ddpg = DDPG.load('trained_models/agent_ddpg') if if_using_ddpg else None
+trained_ddpg = DDPG.load('trained_models/agent_ddpg') if if_using_ddpg else None
 trained_ppo = PPO.load('trained_models/agent_ppo') if if_using_ppo else None
 trained_td3 = TD3.load('trained_models/agent_td3') if if_using_td3 else None
 trained_sac = SAC.load('trained_models/agent_sac') if if_using_sac else None
@@ -216,7 +217,7 @@ stock_dimensions = len(trade.tic.unique())
 state_space = 1 + 2*stock_dimensions + len(INDICATORS)*stock_dimensions
 print(f"Stock Dimentsion: {stock_dimensions}, State Space: {state_space}")
 
-buy_cost_ls = sell_cost_ls = [0.001 for _ in range(stock_dimensions)]
+buy_cost_ls = sell_cost_ls = [0.001] * stock_dimensions
 num_stock_shares = [0] * stock_dimensions
 
 env_kwargs = {
@@ -242,18 +243,19 @@ df_account_value_a2c, df_actions_a2c = DRLAgent.DRL_prediction(
 
 #Help us process data into a form for weight calculation
 def process_df_for_mvo(df):
-    df = df.sort_values(['date', 'tic'], ignore_index = True)[['date', 'tic', 'close']]
+    df = df.sort_values(['date', 'tic'],ignore_index=True)[['date', 'tic', 'close']]
     fst = df
-    fst = dffst = fst.iloc[0:stock_dimensions, :]
+    fst = fst.iloc[0:stock_dimensions, :]
     tic = fst['tic'].tolist()
 
-    mvo = pd.DataFrame
+    mvo = pd.DataFrame()
+
     for k in range(len(tic)):
         mvo[tic[k]] = 0
 
     for i in range(df.shape[0]//stock_dimensions):
         n = df
-        n = n.iloc[i * stock_dimensions:(i+i) * stock_dimensions, :]
+        n = n.iloc[i * stock_dimensions:(i+1) * stock_dimensions, :]
         date = n['date'][i*stock_dimensions]
         mvo.loc[date] = n['close'].tolist()
 
@@ -261,8 +263,32 @@ def process_df_for_mvo(df):
 
 #Calculates weights of average return and convariance matrix
 def StockReturnsComputing(StockPrice, Rows, Columns):
-    StockReturn = np.zero([Rows-1, Columns])
+    StockReturn = np.zeros([Rows-1, Columns])
     for j in range(Columns):      # j: Assets
         for i in range(Rows-1):   # i: Daily Prices
             StockPrice[i,j]=((StockPrice[i+1, j]-StockPrice[i,j])/StockPrice[i,j])* 100
+   
     return StockReturn
+
+StockData = process_df_for_mvo(train)
+TradeData = process_df_for_mvo(trade)
+print(StockData)
+print(TradeData)
+TradeData.to_numpy()
+
+#compute asset returns
+
+arStockPrices = np.asarray(StockData)
+[Rows, Cols]=arStockPrices.shape
+arReturns = StockReturnsComputing(arStockPrices, Rows, Cols)
+
+#compute mean returns and variance covariance matrix of returns
+meanReturns = np.mean(arReturns, axis = 0)
+covReturns = np.cov(arReturns, rowvar = False)
+
+#set precision for printing results 
+np.set_printoptions(precision=3, suppress = True)
+
+#display mean returns and variance-covariance matrix of returns
+print("Mean return of assets in k-portfolio 1\n", meanReturns)
+print("Variance-Covariance matrix of returns\n", covReturns)
