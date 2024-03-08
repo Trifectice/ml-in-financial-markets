@@ -266,7 +266,7 @@ def StockReturnsComputing(StockPrice, Rows, Columns):
     StockReturn = np.zeros([Rows-1, Columns])
     for j in range(Columns):      # j: Assets
         for i in range(Rows-1):   # i: Daily Prices
-            StockPrice[i,j]=((StockPrice[i+1, j]-StockPrice[i,j])/StockPrice[i,j])* 100
+            StockReturn[i,j]=((StockPrice[i+1, j]-StockPrice[i,j])/StockPrice[i,j])* 100
    
     return StockReturn
 
