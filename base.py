@@ -36,7 +36,7 @@ TRADE_END_DATE = '2023-05-01'
 symbols = [
     'aapl',
     'msft',
-    'meta',
+    'META',
     'ibm',
     'hd',
     'cat',
@@ -292,3 +292,29 @@ np.set_printoptions(precision=3, suppress = True)
 #display mean returns and variance-covariance matrix of returns
 print("Mean return of assets in k-portfolio 1\n", meanReturns)
 print("Variance-Covariance matrix of returns\n", covReturns)
+
+# Calculate the efficient frontier to get weights
+ef_mean = EfficientFrontier(meanReturns, covReturns, weight_bounds=(0, 0.5))
+raw_weights_mean = ef_mean.max_sharpe()
+cleaned_weights_mean = ef_mean.clean_weights()
+mvo_weights = np.array([1000000 * cleaned_weights_mean[i] for i in range(10)])
+
+mvo_weights
+# Assuming 'StockData' is a pandas DataFrame with assets as column names
+asset_list = StockData.columns.tolist()
+
+
+#Apply weights to previous price in stock Data
+LastPrice = np.array([1/p for p in StockData.tail(1).to_numpy()[0]])
+Initial_Portfolio = np.multiply(mvo_weights, LastPrice)
+
+
+Initial_Portfolio
+
+#Testing MVO against out of sample data
+Portfolio_Assets = TradeData @ Initial_Portfolio
+MVO_results = pd.DataFrame(Portfolio_Assets, columns=['Mean Var'])
+
+MVO_results
+
+
