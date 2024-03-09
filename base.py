@@ -300,9 +300,6 @@ cleaned_weights_mean = ef_mean.clean_weights()
 mvo_weights = np.array([1000000 * cleaned_weights_mean[i] for i in range(10)])
 
 mvo_weights
-# Assuming 'StockData' is a pandas DataFrame with assets as column names
-asset_list = StockData.columns.tolist()
-
 
 #Apply weights to previous price in stock Data
 LastPrice = np.array([1/p for p in StockData.tail(1).to_numpy()[0]])
